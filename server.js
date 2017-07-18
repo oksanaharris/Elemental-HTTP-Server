@@ -4,29 +4,63 @@ const querystring = require('querystring');
 
 // console.log(http);
 
-const server = http.createServer(function(request, response){
-  // console.log(request.method);
+// console.log('DIRECTORY');
+
+var elementListArr = [];
+var validFileNames = ['/hydrogen.html', '/helium.html', '/', '/index.html', , ' ', '/css/styles.css'];
+
+fs.readdir('./public/', (err, files) => {
+  if (err){
+    console.log('Directory look up error');
+  } else {
+    // console.log('DIRECTORY FILES');
+    // console.log(files);
+
+    var filesToIgnore = ['404.html', '.keep', '.DS_Store', 'css', 'index.html'];
+
+    files.forEach((fileName) => {
+      if (filesToIgnore.indexOf(fileName) === -1 ){
+        if (fileName.indexOf('.') !== -1){
+          var elName = fileName.substring(0, fileName.indexOf('.'));
+          elementListArr.push(elName);
+          // console.log('pushing everything before the dot', elName);
+        } else {
+          elementListArr.push(fileName);
+          // console.log('pushing the entire name', fileName);
+        }
+      }
+    });
+
+    const server = http.createServer(requestHandler);
+    server.listen(8080);
+
+    // console.log('INSIDE THE FS READ DIR');
+    // console.log(elementListArr);
+  }
+});
+
+function requestHandler (request, response){
+  console.log('SET UP OUR SERVER');
+
+  console.log(elementListArr);
 
   //checking if url stipulates a valid file name
-  var validFileNames = ['/hydrogen.html', '/helium.html', '/', '/index.html', '/', '/css/styles.css'];
-  if (validFileNames.indexOf(request.url) != -1){
-    response.writeHead(200);
+  if (request.method === 'GET'){
 
-    if (request.method === 'GET'){
+    if (validFileNames.indexOf(request.url) != -1){
+      response.writeHead(200);
       if (request.url === '/' || request.url === ' '){
         request.url = '/index.html';
       }
       streamFileContents(request.url, response);
-    }
 
-  } else {
-    if (request.method === 'GET'){
+    } else {
       response.statusCode = 404;
       response.writeHead(404);
       streamFileContents('/404.html', response);
-    } else if (request.method === 'POST'){
-      response.writeHead(200);
     }
+  } else {
+    response.writeHead(200);
   }
 
 
@@ -51,18 +85,18 @@ const server = http.createServer(function(request, response){
     body.push(chunk);
     // console.log('this is the console log from DATA');
     // console.log(body);
-  })
+  });
 
   request.on('end', () => {
     body = Buffer.concat(body).toString();
     console.log('this is the console log from END');
     console.log(body);
 
-    if (request.method === 'POST') {
+    if (request.method === 'POST' && request.url === '/elements') {
       var parsedObj = querystring.parse(body);
       console.log('PARSED');
       console.log(parsedObj);
-      createNewElementFile(response, parsedObj);
+      createNewElementFile(request, response, parsedObj);
     }
 
   });
@@ -76,9 +110,9 @@ const server = http.createServer(function(request, response){
   response.on('error', (err) => {
     console.error(err);
   });
-});
+}
 
-server.listen(8080);
+
 
 // server.on('connect', (req, cltSocket, head) => {
 //   console.log('picking up a connection');
@@ -109,12 +143,9 @@ function streamFileContents(url, response){
         console.log('errrrrrroooorrrr');
         // connection.write('HTTP/1.1 500 ERROR');
       } else {
-
-        console.log('DATA FROM streamFileContent');
-        console.log(data.toString());
-
+        // console.log('DATA FROM streamFileContent');
+        // console.log(data.toString());
         response.write(data.toString());
-
         response.end();
       }
     // connection.end();
@@ -128,11 +159,10 @@ function streamFileContents(url, response){
 //   response.end();
 // });
 
-function createNewElementFile (response, elementObj){
-  var filePath = './public/' + elementObj.elementName.toLowerCase() + '.html';
-  console.log('FILEPATH', filePath);
+function createNewElementFile (request, response, elementObj){
+  var elementFilePath = './public/' + elementObj.elementName.toLowerCase() + '.html';
 
-  var stringTemplate = `<!DOCTYPE html>
+  var elementStringTemplate = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -142,23 +172,67 @@ function createNewElementFile (response, elementObj){
 <body>
   <h1>${elementObj.elementName}</h1>
   <h2>${elementObj.elementSymbol}</h2>
-  <h3>${elementObj.elementAtomicNumber}</h3>
+  <h3>Atomic number ${elementObj.elementAtomicNumber}</h3>
   <p>${elementObj.elementDescription}</p>
   <p><a href="/">back</a></p>
 </body>
 </html>`;
 
-  fs.writeFile(filePath, stringTemplate, (err) => {
+elementListArr.push(elementObj.elementName.toLowerCase());
+console.log('now the element array looks like this');
+console.log(elementListArr);
+
+validFileNames.push('/'+elementObj.elementName.toLowerCase()+'.html');
+
+var elementsListStr = '';
+elementListArr.forEach((element, index, array,) => {
+  var elementTitle = element.charAt(0).toUpperCase() + element.substring(1);
+  elementsListStr += `
+    <li>
+      <a href="/${element}.html">${elementTitle}</a>
+    </li>`
+  ;
+});
+
+  fs.writeFile(elementFilePath, elementStringTemplate, (err) => {
     if (err) {
       response.writeHead(500, {'content-Type': 'application/JSON'});
       response.write(JSON.stringify({'success': false}));
       console.log(err);
     } else {
       console.log('The file has been saved.');
+      modifyIndexFile (request, response, elementsListStr);
+    }
+  });
+}
+
+function modifyIndexFile (request, response, elementListStr){
+
+  var indexTemplate = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>The Elements</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <h1>The Elements</h1>
+  <h2>These are all the known elements.</h2>
+  <h3>These are ${elementListArr.length}</h3>
+  <ol> ${elementListStr}
+  </ol>
+</body>
+</html>`
+
+  fs.writeFile('./public/index.html', indexTemplate, (err) => {
+    if (err){
+      response.writeHead(500, {'content-Type': 'application/JSON'});
+      response.write(JSON.stringify({'success': false}));
+      console.log(err);
+    } else {
       response.writeHead(200, {'content-Type': 'application/JSON'});
       response.write(JSON.stringify({'success': true}));
     }
     response.end();
   });
 }
-
