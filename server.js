@@ -20,9 +20,13 @@ const server = http.createServer(function(request, response){
     }
 
   } else {
-    response.statusCode = 404;
-    response.writeHead(404);
-    streamFileContents('/404.html', response);
+    if (request.method === 'GET'){
+      response.statusCode = 404;
+      response.writeHead(404);
+      streamFileContents('/404.html', response);
+    } else if (request.method === 'POST'){
+      response.writeHead(200);
+    }
   }
 
 
@@ -76,13 +80,13 @@ const server = http.createServer(function(request, response){
 
 server.listen(8080);
 
-server.on('connect', (req, cltSocket, head) => {
-  console.log('picking up a connection');
+// server.on('connect', (req, cltSocket, head) => {
+//   console.log('picking up a connection');
 
-  clientConnection.on('data', (input) =>{
-    console.log(input.toString());
-  })
-});
+//   clientConnection.on('data', (input) =>{
+//     console.log(input.toString());
+//   })
+// });
 
 
   // var status = 200;
@@ -106,7 +110,11 @@ function streamFileContents(url, response){
         // connection.write('HTTP/1.1 500 ERROR');
       } else {
 
-        response.write(data);
+        console.log('DATA FROM streamFileContent');
+        console.log(data.toString());
+
+        response.write(data.toString());
+
         response.end();
       }
     // connection.end();
