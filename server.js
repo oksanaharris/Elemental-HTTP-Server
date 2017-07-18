@@ -12,6 +12,8 @@ fs.readdir('./public/', (err, files) => {
 
     var filesToIgnore = ['404.html', '.keep', '.DS_Store', 'css', 'index.html'];
 
+    console.log('these are all the files', files);
+
     files.forEach((fileName) => {
       if (filesToIgnore.indexOf(fileName) === -1 ){
         if (fileName.indexOf('.') !== -1){
@@ -22,6 +24,8 @@ fs.readdir('./public/', (err, files) => {
           elementListArr.push(fileName);
           // console.log('pushing the entire name', fileName);
         }
+        console.log(fileName);
+        validFileNames.push('/' + fileName);
       }
     });
 
@@ -34,6 +38,7 @@ function requestHandler (request, response){
   console.log('Got a request - ', request.method);
 
   console.log('starting list of element files', elementListArr);
+  console.log('starting list of files', validFileNames);
 
   if (request.method === 'GET'){
 
@@ -64,7 +69,12 @@ function requestHandler (request, response){
     console.log('this is the console log from END');
     console.log(body);
 
-    if ((request.method === 'POST' && request.url === '/elements') || (request.method === 'PUT' && validFileNames.indexOf(request.url) !== -1)){
+    if (request.method === 'PUT' && (request.url === '/index.html' || request.url === '/' || request.url === '' || request.url === '') ){
+      response.writeHead(400, {'content-Type': 'application/JSON'});
+      response.write(JSON.stringify({'success': false, 'error' : 'cannot POST to index'}));
+      console.log('error - trying to POST to index');
+      response.end();
+    } else if ((request.method === 'POST' && request.url === '/elements') || (request.method === 'PUT' && validFileNames.indexOf(request.url) !== -1)){
 
       var parsedObj = querystring.parse(body);
 
@@ -78,12 +88,15 @@ function requestHandler (request, response){
         response.write(JSON.stringify({'error': 'not all of the required fields were provided'}));
         response.end();
       }
-    }
-
-    if (request.method === 'PUT' && validFileNames.indexOf(request.url) === -1){
+    } else if (request.method === 'PUT' && validFileNames.indexOf(request.url) === -1){
       response.writeHead(500, {'content-Type': 'application/JSON'});
       response.write(JSON.stringify({'error': 'resource does not exist'}));
       console.log('error - trying to modify a non-existing file');
+      response.end();
+    } else if (request.method === 'POST' && request.url !== '/elements'){
+      response.writeHead(400, {'content-Type': 'application/JSON'});
+      response.write(JSON.stringify({'success': false, 'error' : 'have to POST to elements only'}));
+      console.log('error - trying to POST to something other than elements');
       response.end();
     }
 
@@ -140,6 +153,10 @@ function createNewElementFile (request, response, elementObj){
     console.log(elementListArr);
   }
 
+  if (request.method === 'PUT'){
+    elementFilePath = './public' + request.url;
+  }
+
   var elementsListStr = '';
   elementListArr.forEach((element, index, array,) => {
     var elementTitle = element.charAt(0).toUpperCase() + element.substring(1);
@@ -186,7 +203,6 @@ function modifyIndexFile (request, response, elementListStr){
       response.writeHead(500, {'content-Type': 'application/JSON'});
       response.write(JSON.stringify({'success': false}));
       console.log(err);
-      response.end();
     } else {
       response.writeHead(200, {'content-Type': 'application/JSON'});
       response.write(JSON.stringify({'success': true}));
